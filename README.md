@@ -34,7 +34,7 @@ Củng cố và áp dụng các kiến thức về Python, OpenCV, và mô hình
   Thuật toán theo dõi: DeepSORT / ByteTrack
   Thiết bị: Camera giám sát hoặc video mẫu
 
-Viphamdauxe/
+Vi_Pham_Dau_Xe_Trai_Phep/
 ├── src/
 │   ├── main.py
 │   └── ui.py
