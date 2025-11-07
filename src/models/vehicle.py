@@ -1,104 +1,99 @@
-from collections import deque
 import numpy as np
+from ..models.vehicle import Vehicle
 
-class Vehicle:
-    def __init__(self, vehicle_id, vehicle_class, detection_box, center, confidence, frame_count):
-        self.id = vehicle_id
-        self.vehicle_class = vehicle_class
-        self.positions = deque([center], maxlen=30)
-        self.last_box = detection_box
-        self.center = center
-        self.status = 'unknown'
-        self.status_frames = 0
-        self.speed_history = deque(maxlen=10)
-        self.moving_frames = 0
-        self.last_update = frame_count
-        self.confidence_history = deque([confidence], maxlen=10)
-        self.total_detections = 1
-        self.last_seen_frame = frame_count
-        self.is_occluded = False
-        self.frozen_status = None
-        self.frozen_status_frames = 0
-        
-    def update(self, detection_box, center, confidence, frame_count):
-        """Update vehicle with new detection"""
-        self.positions.append(center)
-        self.last_box = detection_box
-        self.center = center
-        self.last_update = frame_count
-        self.last_seen_frame = frame_count
-        self.confidence_history.append(confidence)
-        self.total_detections += 1
-        
-        # Reset occlusion if reappeared
-        if self.is_occluded:
-            self.is_occluded = False
-            self.frozen_status = None
-            self.frozen_status_frames = 0
-            
-    def calculate_movement(self, config):
-        """Calculate movement metrics and update status"""
-        if len(self.positions) >= 2:
-            last_pos = np.array(self.positions[-1])
-            prev_pos = np.array(self.positions[-2])
-            inst_dist = np.linalg.norm(last_pos - prev_pos)
-            self.speed_history.append(inst_dist)
-            
-        # Calculate distances for recent frames
-        distances = []
-        if len(self.positions) >= 3:
-            start = max(1, len(self.positions) - 3)
-            for i in range(start, len(self.positions)):
-                current_pos = np.array(self.positions[i])
-                previous_pos = np.array(self.positions[i-1])
-                distance = np.linalg.norm(current_pos - previous_pos)
-                distances.append(distance)
-                
-        avg_distance = np.mean(distances) if distances else 0
-        max_distance = np.max(distances) if distances else 0
-        
-        # Calculate recent speed
-        recent_speeds = list(self.speed_history)[-3:]
-        avg_recent_speed = np.mean(recent_speeds) if recent_speeds else 0
-        
-        # Update moving frames counter
-        if avg_recent_speed >= config.MOVE_THRESHOLD:
-            self.moving_frames += 1
-        else:
-            self.moving_frames = 0
-            
-        # Determine status
-        if self.moving_frames >= config.MIN_FRAMES_MOVE:
-            self.status = 'moving'
-            self.status_frames = 0
-        else:
-            if avg_distance < config.STOP_THRESHOLD and max_distance < config.STOP_THRESHOLD * 2:
-                self.status_frames += 1
-                if self.status_frames >= config.MIN_FRAMES_STOP:
-                    self.status = 'stopped'
-                    
-    def get_effective_status(self):
-        """Get the effective status for display/counting"""
-        if self.is_occluded and self.frozen_status is not None:
-            return self.frozen_status
-        return self.status
-        
-    def freeze_status(self):
-        """Freeze current status when occluded"""
-        self.is_occluded = True
-        self.frozen_status = self.status
-        self.frozen_status_frames = self.status_frames
-        
-    def should_remove(self, frame_count, config):
-        """Check if vehicle should be removed from tracking"""
-        frames_since_last_update = frame_count - self.last_update
-        avg_confidence = np.mean(list(self.confidence_history)) if self.confidence_history else 0
-        
-        is_too_old = frames_since_last_update > config.MAX_TRACK_AGE
-        is_occluded_too_long = self.is_occluded and (frame_count - self.last_seen_frame) > config.OCCLUSION_THRESHOLD
-        is_missing_too_long = (frame_count - self.last_seen_frame) > int(config.MISSING_SECONDS * 30)  # Assuming 30 FPS
-        is_low_confidence = avg_confidence < config.MIN_TRACK_CONFIDENCE and self.total_detections > 5
-        has_few_detections = self.total_detections < config.MIN_DETECTIONS_TO_KEEP and frames_since_last_update > 10
-        
-        return ((is_too_old and not self.is_occluded) or is_missing_too_long or 
-                is_occluded_too_long or is_low_confidence or has_few_detections)
+class VehicleTracker:
+    def __init__(self, config):
+        self.config = config
+        self.vehicles = {}
+        self.next_id = 1
+        self.frame_count = 0
+
+    def calculate_iou(self, box1, box2):
+        """Tính IoU giữa hai bounding box"""
+        x1, y1 = max(box1[0], box2[0]), max(box1[1], box2[1])
+        x2, y2 = min(box1[2], box2[2]), min(box1[3], box2[3])
+        if x2 <= x1 or y2 <= y1:
+            return 0
+        inter = (x2 - x1) * (y2 - y1)
+        area1 = (box1[2] - box1[0]) * (box1[3] - box1[1])
+        area2 = (box2[2] - box2[0]) * (box2[3] - box2[1])
+        return inter / (area1 + area2 - inter + 1e-6)
+
+    def assign_vehicle_ids(self, detections):
+        """Gán ID cho các phát hiện"""
+        if not self.vehicles:
+            assigned = {self.next_id + i: det for i, det in enumerate(detections)}
+            self.next_id += len(detections)
+            return assigned
+
+        iou_matrix = np.array([[self.calculate_iou(det[1]['box'], v.last_box)
+                               for v in self.vehicles.values()] for det in detections])
+
+        assigned, used_det, used_track = {}, set(), set()
+        while True:
+            max_idx = np.unravel_index(np.argmax(iou_matrix), iou_matrix.shape)
+            max_iou = iou_matrix[max_idx]
+            if max_iou < self.config.IOU_THRESHOLD:
+                break
+            i, j = max_idx
+            vid = list(self.vehicles.keys())[j]
+            assigned[vid] = detections[i]
+            used_det.add(i)
+            used_track.add(j)
+            iou_matrix[i, :] = -1
+            iou_matrix[:, j] = -1
+
+        # Gán ID mới cho phát hiện chưa dùng
+        for i, det in enumerate(detections):
+            if i not in used_det:
+                assigned[self.next_id] = det
+                self.next_id += 1
+        return assigned
+
+    def update(self, detections):
+        """Cập nhật theo khung hình mới"""
+        self.frame_count += 1
+        assigned = self.assign_vehicle_ids(detections)
+
+        for vid, (cls, det) in assigned.items():
+            if vid not in self.vehicles:
+                self.vehicles[vid] = Vehicle(vid, cls, det['box'], det['center'], det['confidence'], self.frame_count)
+            else:
+                v = self.vehicles[vid]
+                v.update(det['box'], det['center'], det['confidence'], self.frame_count)
+                v.calculate_movement(self.config)
+
+        self._handle_occlusion()
+        self._cleanup_vehicles()
+        return assigned
+
+    def _handle_occlusion(self):
+        """Xử lý xe bị che khuất"""
+        for v in self.vehicles.values():
+            if self.frame_count - v.last_seen_frame > 3:
+                if not v.is_occluded:
+                    v.freeze_status()
+                v.frozen_status_frames += 1
+
+    def _cleanup_vehicles(self):
+        """Xóa xe cũ hoặc kém tin cậy"""
+        self.vehicles = {vid: v for vid, v in self.vehicles.items()
+                         if not v.should_remove(self.frame_count, self.config)}
+
+    def get_statistics(self):
+        """Thống kê trạng thái xe"""
+        cars = sum(v.vehicle_class == 2 for v in self.vehicles.values())
+        bikes = sum(v.vehicle_class == 3 for v in self.vehicles.values())
+        stopped = sum(v.get_effective_status() == 'stopped' and v.status_frames >= self.config.MIN_FRAMES_STOP
+                      for v in self.vehicles.values())
+        moving = len(self.vehicles) - stopped
+        occluded = sum(v.is_occluded for v in self.vehicles.values())
+
+        return {
+            'total': len(self.vehicles),
+            'cars': cars,
+            'motorbikes': bikes,
+            'moving': moving,
+            'stopped': stopped,
+            'occluded': occluded
+        }
