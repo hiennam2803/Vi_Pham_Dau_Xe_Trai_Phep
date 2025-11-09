@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+import time
 
 class Visualizer:
     def __init__(self, config):
@@ -27,17 +28,26 @@ class Visualizer:
             
             # Determine color based on status
             if effective_status == 'stopped' and vehicle.status_frames >= self.config.MIN_FRAMES_STOP:
-                color = (0, 255, 0)  # green = stopped
-                if vehicle.is_occluded:
-                    status_text = "DA DUNG (CHE KHUAT)"
+                # KIỂM TRA VI PHẠM - THÊM MỚI
+                if vehicle.stop_start_time is not None:
+                    stop_duration = time.time() - vehicle.stop_start_time
+                    if stop_duration >= self.config.MAX_STOP_TIME_BEFORE_CAPTURE:
+                        color = (0, 255, 255)  # Vàng - cảnh báo vi phạm
+                        status_text = "VI PHAM !!!"
+                    else:
+                        color = (0, 255, 0)  # Xanh - đang dừng
+                        status_text = "DA DUNG"
                 else:
+                    color = (0, 255, 0)
                     status_text = "DA DUNG"
+                    
+                if vehicle.is_occluded:
+                    status_text += " (CHE KHUAT)"
             else:
-                color = (0, 0, 255)  # red = moving
+                color = (0, 0, 255)  # Đỏ - di chuyển
+                status_text = "DI CHUYEN"
                 if vehicle.is_occluded and effective_status == 'moving':
-                    status_text = "DI CHUYEN (CHE KHUAT)"
-                else:
-                    status_text = "DI CHUYEN"
+                    status_text += " (CHE KHUAT)"
                     
             # Draw bounding box and information
             cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
@@ -48,6 +58,13 @@ class Visualizer:
             cv2.putText(frame, label, (x1, y1 - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
             cv2.putText(frame, status_text, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
             
+            # HIỂN THỊ THỜI GIAN DỪNG - THÊM MỚI
+            if vehicle.stop_start_time is not None:
+                stop_duration = time.time() - vehicle.stop_start_time
+                duration_text = f"Dung: {int(stop_duration)}s"
+                cv2.putText(frame, duration_text, (x1, y2 + 20), 
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
+            
             # Draw trail
             if len(vehicle.positions) > 1:
                 points = np.array(vehicle.positions, dtype=np.int32)
@@ -55,19 +72,27 @@ class Visualizer:
                 
     def draw_statistics(self, frame, stats):
         """Draw statistics on frame"""
-        cv2.putText(frame, f"Tong: {stats['total']}", (10, 30), 
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-        cv2.putText(frame, f"Xe hoi: {stats['cars']}", (10, 60), 
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
-        cv2.putText(frame, f"Xe may: {stats['motorbikes']}", (10, 90), 
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
-        cv2.putText(frame, f"Di chuyen: {stats['moving']}", (10, 120), 
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
-        cv2.putText(frame, f"Da dung: {stats['stopped']}", (10, 150), 
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
-        cv2.putText(frame, f"Bi che khuat: {stats['occluded']}", (10, 180), 
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 165, 0), 2)
+                # THÊM THỐNG KÊ VI PHẠM
+        violations_count = int(stats.get('violations', 0))
+        cv2.putText(frame, f"Vi pham: {violations_count}", (10, 210), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
+        y_pos = 30
+        stats_color = (255, 255, 255)
+        font = cv2.FONT_HERSHEY_SIMPLEX
         
-        # Instructions
-        cv2.putText(frame, "Nhan 'q' de thoat", (10, frame.shape[0] - 20), 
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+        # Vẽ các thông số thống kê
+        info_list = [
+            (f"Tong so xe: {stats['total']}", stats_color),
+            (f"O to: {stats.get('cars', 0)}", stats_color),
+            (f"Xe may: {stats.get('motorbikes', 0)}", stats_color),
+            (f"Dang di chuyen: {stats['moving']}", stats_color),
+            (f"Dang dung: {stats['stopped']}", stats_color),
+            (f"Vi pham: {stats.get('violations', 0)}", (0, 255, 255))
+        ]
+        
+        for text, color in info_list:
+            cv2.putText(frame, text, (10, y_pos), font, 0.6, color, 2)
+            y_pos += 30
+        cv2.putText(frame, f"Vi pham: {violations_count}", (10, 210), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
+        

@@ -26,8 +26,16 @@ class Config:
     OCCLUSION_THRESHOLD = 45
     MISSING_SECONDS = 60
     
+    # VIOLATION CAPTURE SETTINGS - THÊM MỚI
+    VIOLATION_CAPTURE_ENABLED = True
+    MAX_STOP_TIME_BEFORE_CAPTURE = 10  # giây
+    CAPTURE_DIR = "capture"
+    SAVE_FULL_FRAME = True  # Lưu toàn bộ frame hoặc chỉ crop xe
+    CAPTURE_COOLDOWN = 30  # giây - thời gian chờ trước khi chụp lại cùng 1 xe
+    
     # Vehicle names
     VEHICLE_NAMES = {
         2: "Xe hoi",
         3: "Xe may"
     }
+    

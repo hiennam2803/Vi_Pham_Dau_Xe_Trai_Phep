@@ -1,4 +1,5 @@
 import numpy as np
+import time
 from collections import defaultdict
 from models.vehicle import Vehicle
 
@@ -129,6 +130,7 @@ class VehicleTracker:
             # Update frozen status frames
             if vehicle.is_occluded:
                 vehicle.frozen_status_frames += 1
+    
                 
     def _cleanup_vehicles(self):
         """Remove old and low-confidence vehicles"""
@@ -140,27 +142,42 @@ class VehicleTracker:
         for vehicle_id in to_remove:
             del self.vehicles[vehicle_id]
             
+    def check_violations(self):
+        """Check for vehicles that need violation capture"""
+        violations = []
+        for vehicle in self.vehicles.values():
+            if vehicle.check_violation(self.config):
+                violations.append(vehicle)
+        return violations
+
     def get_statistics(self):
         """Get tracking statistics"""
+        # Calculate basic counts
+        total = len(self.vehicles)
         car_count = sum(1 for v in self.vehicles.values() if v.vehicle_class == 2)
         motorbike_count = sum(1 for v in self.vehicles.values() if v.vehicle_class == 3)
         
-        moving_count = 0
-        stopped_count = 0
+        # Calculate movement statistics
+        moving = 0
+        stopped = 0
+        violations = 0
+        
         for vehicle in self.vehicles.values():
-            effective_status = vehicle.get_effective_status()
-            if effective_status == 'stopped' and vehicle.status_frames >= self.config.MIN_FRAMES_STOP:
-                stopped_count += 1
-            else:
-                moving_count += 1
-                
-        occluded_count = sum(1 for v in self.vehicles.values() if v.is_occluded)
+            status = vehicle.get_effective_status()
+            if status == 'moving':
+                moving += 1
+            elif status == 'stopped':
+                stopped += 1
+                # Check for violations
+                if (vehicle.stop_start_time is not None and 
+                    time.time() - vehicle.stop_start_time >= self.config.MAX_STOP_TIME_BEFORE_CAPTURE):
+                    violations += 1
         
         return {
-            'total': len(self.vehicles),
+            'total': total,
             'cars': car_count,
             'motorbikes': motorbike_count,
-            'moving': moving_count,
-            'stopped': stopped_count,
-            'occluded': occluded_count
+            'moving': moving,
+            'stopped': stopped,
+            'violations': violations
         }

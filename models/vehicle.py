@@ -1,5 +1,6 @@
 from collections import deque
 import numpy as np
+import time
 
 class Vehicle:
     def __init__(self, vehicle_id, vehicle_class, detection_box, center, confidence, frame_count):
@@ -19,6 +20,11 @@ class Vehicle:
         self.is_occluded = False
         self.frozen_status = None
         self.frozen_status_frames = 0
+        
+        # VIOLATION TRACKING - THÊM MỚI
+        self.stop_start_time = None
+        self.last_capture_time = 0
+        self.violation_count = 0
         
     def update(self, detection_box, center, confidence, frame_count):
         """Update vehicle with new detection"""
@@ -61,27 +67,79 @@ class Vehicle:
         recent_speeds = list(self.speed_history)[-3:]
         avg_recent_speed = np.mean(recent_speeds) if recent_speeds else 0
         
-        # Update moving frames counter
+        # Update status based on movement
+        previous_status = self.status
         if avg_recent_speed >= config.MOVE_THRESHOLD:
-            self.moving_frames += 1
-        else:
-            self.moving_frames = 0
-            
-        # Determine status
-        if self.moving_frames >= config.MIN_FRAMES_MOVE:
-            self.status = 'moving'
-            self.status_frames = 0
-        else:
-            if avg_distance < config.STOP_THRESHOLD and max_distance < config.STOP_THRESHOLD * 2:
+            if self.status == 'moving':
                 self.status_frames += 1
-                if self.status_frames >= config.MIN_FRAMES_STOP:
+            elif self.status == 'stopped':
+                if self.status_frames < config.MIN_FRAMES_MOVE:
+                    self.status_frames += 1
+                else:
+                    self.status = 'moving'
+                    self.status_frames = 1
+            else:  # unknown
+                if self.status_frames < config.MIN_FRAMES_MOVE:
+                    self.status_frames += 1
+                else:
+                    self.status = 'moving'
+                    self.status_frames = 1
+        else:  # Not moving
+            if self.status == 'stopped':
+                self.status_frames += 1
+            elif self.status == 'moving':
+                if self.status_frames < config.MIN_FRAMES_STOP:
+                    self.status_frames += 1
+                else:
                     self.status = 'stopped'
-                    
+                    self.status_frames = 1
+            else:  # unknown
+                if self.status_frames < config.MIN_FRAMES_STOP:
+                    self.status_frames += 1
+                else:
+                    self.status = 'stopped'
+                    self.status_frames = 1
+            
+        # VIOLATION TRACKING - THÊM MỚI: Theo dõi thời gian bắt đầu dừng
+        current_time = time.time()
+        effective_status = self.get_effective_status()
+        
+        if effective_status == 'stopped' and self.status_frames >= config.MIN_FRAMES_STOP:
+            if self.stop_start_time is None:
+                self.stop_start_time = current_time
+        else:
+            self.stop_start_time = None
+            
+    def check_violation(self, config):
+        """Check if vehicle should be captured for violation"""
+        if not config.VIOLATION_CAPTURE_ENABLED:
+            return False
+            
+        if self.stop_start_time is None:
+            return False
+            
+        current_time = time.time()
+        stop_duration = current_time - self.stop_start_time
+        
+        # Kiểm tra nếu đã dừng đủ lâu và đã qua thời gian chờ
+        if (stop_duration >= config.MAX_STOP_TIME_BEFORE_CAPTURE and 
+            current_time - self.last_capture_time >= config.CAPTURE_COOLDOWN):
+            return True
+        
+        return False
+            
     def get_effective_status(self):
         """Get the effective status for display/counting"""
         if self.is_occluded and self.frozen_status is not None:
             return self.frozen_status
+        
+        # Return the current status (already calculated in calculate_movement)
         return self.status
+            
+    def mark_captured(self):
+        """Mark vehicle as captured"""
+        self.last_capture_time = time.time()
+        self.violation_count += 1
         
     def freeze_status(self):
         """Freeze current status when occluded"""
@@ -102,3 +160,4 @@ class Vehicle:
         
         return ((is_too_old and not self.is_occluded) or is_missing_too_long or 
                 is_occluded_too_long or is_low_confidence or has_few_detections)
+    

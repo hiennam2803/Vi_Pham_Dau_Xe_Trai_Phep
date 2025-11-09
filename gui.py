@@ -45,7 +45,7 @@ class CarCheckGUI:
         """Chọn file video"""
         path = filedialog.askopenfilename(
             title='Chọn file video',
-            filetypes=[('Video files', '*.mp4 *.avi *.mov *.mkv'), ('All files', '*.*')]
+            filetypes=[('Video files', '*.mp4 *.avi *.mov *.mkv *.png *.jpg'), ('All files', '*.*')]
         )
         if path:
             self.source_var.set(path)
