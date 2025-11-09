@@ -29,7 +29,8 @@ class Config:
     # VIOLATION CAPTURE SETTINGS - THÊM MỚI
     VIOLATION_CAPTURE_ENABLED = True
     MAX_STOP_TIME_BEFORE_CAPTURE = 10  # giây
-    CAPTURE_DIR = "capture"
+    # Lưu vào thư mục con 'capture/picture'
+    CAPTURE_DIR = "capture/picture"
     SAVE_FULL_FRAME = True  # Lưu toàn bộ frame hoặc chỉ crop xe
     CAPTURE_COOLDOWN = 30  # giây - thời gian chờ trước khi chụp lại cùng 1 xe
     

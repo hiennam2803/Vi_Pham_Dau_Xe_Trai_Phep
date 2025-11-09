@@ -12,8 +12,13 @@ class CaptureManager:
     def setup_capture_directory(self):
         """Tạo thư mục lưu ảnh nếu chưa tồn tại"""
         capture_path = Path(self.config.CAPTURE_DIR)
-        capture_path.mkdir(exist_ok=True)
-        print(f"Thư mục lưu ảnh: {capture_path.absolute()}")
+        # Tạo thư mục cùng các thư mục cha nếu cần (ví dụ 'capture/picture')
+        capture_path.mkdir(parents=True, exist_ok=True)
+        try:
+            abs_path = capture_path.resolve()
+        except Exception:
+            abs_path = capture_path.absolute()
+        print(f"Thư mục lưu ảnh: {abs_path}")
         
     def capture_violation(self, frame, vehicle, detections=None):
         """Chụp ảnh vi phạm"""
