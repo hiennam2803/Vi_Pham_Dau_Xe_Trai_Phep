@@ -46,7 +46,7 @@ class Visualizer:
                     status_text += " (CHE KHUAT)"
                     
                 #CHỈ XE DỪNG MỚI VẼ KHUNG
-                cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+                cv2.rectangle(frame, (x1, y1), (x2, y2), color, 1)
 
             else:
                 # Xe đang di chuyển — chỉ vẽ text, không có khung
@@ -59,12 +59,12 @@ class Visualizer:
             avg_confidence = np.mean(list(vehicle.confidence_history)) if vehicle.confidence_history else 0
             if (status_text == ""):
                 label = f""
-                cv2.putText(frame, label, (x1, y1 - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
-                cv2.putText(frame, status_text, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+                cv2.putText(frame, label, (x1, y1 - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 1)
+                cv2.putText(frame, status_text, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
             else:
                 label = f"ID:{vehicle_id} {vehicle_name} {status_text} {avg_confidence:.2f}"
-                cv2.putText(frame, label, (x1, y1 - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
-                cv2.putText(frame, status_text, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+                cv2.putText(frame, label, (x1, y1 - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 1)
+                cv2.putText(frame, status_text, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
             # Thời gian dừng (nếu có)
             if vehicle.stop_start_time is not None:
                 stop_duration = time.time() - vehicle.stop_start_time
@@ -75,13 +75,13 @@ class Visualizer:
             # Vẽ đường di chuyển (trail)
             if len(vehicle.positions) > 1:
                 points = np.array(vehicle.positions, dtype=np.int32)
-                cv2.polylines(frame, [points], False, color, 2)
+                cv2.polylines(frame, [points], False, color, 1)
 
     def draw_statistics(self, frame, stats):
         """Draw statistics on frame"""
-        violations_count = int(stats.get('violations', 0))
-        cv2.putText(frame, f"Vi pham: {violations_count}", (10, 210), 
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
+        # violations_count = int(stats.get('violations', 0))
+        # cv2.putText(frame, f"Vi pham: {violations_count}", (10, 210), 
+        #             cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
         
         y_pos = 30
         stats_color = (255, 255, 255)
@@ -90,9 +90,9 @@ class Visualizer:
         info_list = [
             (f"Tong so xe: {stats['total']}", stats_color),
             (f"Dang dung: {stats['stopped']}", stats_color),
-            (f"Vi pham: {stats.get('violations', 0)}", (0, 255, 255))
+            (f"Vi pham: {stats.get('violations', 0)}", (0, 0, 255))
         ]
         
         for text, color in info_list:
-            cv2.putText(frame, text, (10, y_pos), font, 0.6, color, 2)
+            cv2.putText(frame, text, (10, y_pos), font, 0.6, color, 1)
             y_pos += 30

@@ -18,7 +18,6 @@ class CarCheckGUI:
             style.theme_use('clam')
             style.configure('Accent.TButton', foreground='white', background='#4CAF50')
             style.configure('Danger.TButton', foreground='white', background='#f44336')
-            style.configure('Config.TButton', foreground='white', background='#2196F3')
         except Exception:
             pass
 
