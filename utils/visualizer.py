@@ -75,7 +75,7 @@ class Visualizer:
             # Vẽ đường di chuyển (trail)
             if len(vehicle.positions) > 1:
                 points = np.array(vehicle.positions, dtype=np.int32)
-                cv2.polylines(frame, [points], False, color, 1)
+                cv2.polylines(frame, [points], False, color, 0)
 
     def draw_statistics(self, frame, stats):
         """Draw statistics on frame"""

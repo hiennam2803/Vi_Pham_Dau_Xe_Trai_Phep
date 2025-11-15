@@ -63,7 +63,7 @@ class CaptureManager:
                 cv2.putText(frame_copy, duration_text, (x1, y1 - 20), 
                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
                 
-                filename = f"violation_{vehicle.id}_{vehicle_name_clean}_{timestamp}.jpg"
+                filename = f"{vehicle.id}_{vehicle_name_clean}_{timestamp}.jpg"
                 filepath = os.path.join(self.config.CAPTURE_DIR, filename)
                 
                 if cv2.imwrite(filepath, frame_copy):
