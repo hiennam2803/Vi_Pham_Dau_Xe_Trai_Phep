@@ -356,10 +356,10 @@ class CarCheckGUI:
             header = tk.Frame(win, bg=self.colors['primary'], height=60)
             header.pack(fill='x')
             header.pack_propagate(False)
-            
+
             header_content = tk.Frame(header, bg=self.colors['primary'])
             header_content.pack(fill='both', padx=20, pady=15)
-            
+
             title_font = ('Segoe UI', 14, 'bold')
             tk.Label(header_content, 
                     text='⚙ Cấu hình hệ thống CarCheck', 
@@ -368,7 +368,7 @@ class CarCheckGUI:
                     fg='white').pack(side='left')
 
             # Container
-            container = tk.Frame(win, bg=self.colors['light'], padx=15, pady=15)
+            container = tk.Frame(win, bg=self.colors['background'], padx=15, pady=15)
             container.pack(fill='both', expand=True)
 
             # Scrollable content
@@ -389,23 +389,23 @@ class CarCheckGUI:
                 # Create setting card
                 setting_card = tk.Frame(scroll_frame, bg=self.colors['card_bg'], pady=8)
                 setting_card.pack(fill='x', pady=4)
-                
+
                 # Setting name with type
                 name_font = ('Segoe UI', 10, 'bold')
                 name_label = tk.Label(setting_card, 
                                      text=f"{name} ({type(val).__name__})",
                                      font=name_font,
                                      bg=self.colors['card_bg'],
-                                     fg=self.colors['dark'],
+                                     fg=self.colors['text'],
                                      anchor='w')
                 name_label.pack(fill='x', pady=(0, 5))
-                
+
                 # Editor based on type
                 if isinstance(val, bool):
                     var = tk.BooleanVar(value=val)
                     cb_frame = tk.Frame(setting_card, bg=self.colors['card_bg'])
                     cb_frame.pack(fill='x')
-                    
+
                     cb = tk.Checkbutton(cb_frame, 
                                        variable=var,
                                        text=f'Bật/Tắt {name}',
@@ -415,7 +415,7 @@ class CarCheckGUI:
                                        font=('Segoe UI', 9))
                     cb.pack(side='left')
                     editors[name] = ('bool', var)
-                    
+
                 elif isinstance(val, (int, float)):
                     var = tk.StringVar(value=str(val))
                     entry = tk.Entry(setting_card, 
@@ -426,7 +426,7 @@ class CarCheckGUI:
                                     bd=1)
                     entry.pack(fill='x', pady=2)
                     editors[name] = ('number', var)
-                    
+
                 elif isinstance(val, str):
                     entry = tk.Entry(setting_card,
                                     font=('Segoe UI', 9),
@@ -436,12 +436,12 @@ class CarCheckGUI:
                     entry.insert(0, val)
                     entry.pack(fill='x', pady=2)
                     editors[name] = ('string', entry)
-                    
+
                 else:
                     # Complex types
                     txt_frame = tk.Frame(setting_card, bg=self.colors['card_bg'])
                     txt_frame.pack(fill='x')
-                    
+
                     txt = tk.Text(txt_frame, 
                                  height=3, 
                                  font=('Consolas', 8),
@@ -549,11 +549,11 @@ class CarCheckGUI:
                                pady=8,
                                command=on_apply)
             save_btn.pack(side='right', padx=(10, 0))
-            
+
             cancel_btn = tk.Button(btn_frame,
                                  text='↩ ĐÓNG',
                                  font=('Segoe UI', 10, 'bold'),
-                                 bg=self.colors['text_light'],
+                                 bg=self.colors['danger'],
                                  fg='white',
                                  relief='flat',
                                  cursor='hand2',
