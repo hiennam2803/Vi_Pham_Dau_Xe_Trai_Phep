@@ -65,7 +65,18 @@ def process_video(source):
                 for vehicle in violations:
                     if capture_manager.capture_violation(frame, vehicle, assigned_detections):
                         print(f"Đã chụp ảnh vi phạm cho xe ID: {vehicle.id}")
-            
+                          # === GỬI EMAIL ===
+                        from report.report_mail_manager import ReportMailManager
+
+                        mailer = ReportMailManager(
+                        sender_email="ukikaitovn@gmail.com",
+                        app_password="yvaectmodvzsxtqo",
+                        receiver_email="huy.evergarden@gmail.com"
+    )
+
+                        mailer.send_violation_report(
+                           os.path.join(config.CAPTURE_DIR, vehicle.last_captured_filename)
+    )
             # Vẽ kết quả lên frame
             visualizer.draw_vehicles(frame, tracker.vehicles, assigned_detections)
             

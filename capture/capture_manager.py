@@ -68,6 +68,7 @@ class CaptureManager:
                 
                 if cv2.imwrite(filepath, frame_copy):
                     print(f"Đã chụp ảnh vi phạm: {filename}")
+                    vehicle.last_captured_filename = filename
                     vehicle.mark_captured()
                     return True
                 else:
