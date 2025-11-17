@@ -3,96 +3,120 @@ import numpy as np
 import time
 
 class Visualizer:
+    """Hiện thực các phương thức để vẽ bounding box, trạng thái, và thống kê lên frame video."""
     def __init__(self, config):
         self.config = config
-        
-    def draw_vehicles(self, frame, vehicles, assigned_detections):
-        """Draw vehicles and information on frame"""
+        self.colors = {
+            'moving': (0, 0, 255),      # Đỏ - di chuyển
+            'stopped': (255, 255, 255), # Trắng - dừng
+            'violation': (0, 0, 255),   # Đỏ - vi phạm
+            'text': (255, 255, 255),    # Trắng
+            'stats': (255, 255, 0)      # Vàng cho thống kê
+        }
+        self.font_small = cv2.FONT_HERSHEY_SIMPLEX
+        self.font_scale_small = 0.4
+        self.font_scale_normal = 0.5
+        self.thickness = 1  # Mỏng nhất có thể
+
+    def draw_vehicles_fast(self, frame, vehicles, assigned_detections):
+        """Phiên bản tối ưu tốc độ - chỉ vẽ những gì thực sự cần thiết"""
+        current_time = time.time()
         for vehicle_id, vehicle in vehicles.items():
-            # Lấy thông tin hiển thị
-            if vehicle_id in assigned_detections:
-                cls, detection = assigned_detections[vehicle_id]
-                x1, y1, x2, y2 = detection['box']
-                cx, cy = detection['center']
-            else:
-                if vehicle.is_occluded:
-                    x1, y1, x2, y2 = vehicle.last_box
-                    cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
-                    cls = vehicle.vehicle_class
-                else:
-                    continue
-                    
-            # Xác định trạng thái
-            vehicle_name = self.config.VEHICLE_NAMES.get(cls, "Xe khac")
-            effective_status = vehicle.get_effective_status()
-            
-            # -----------------------------
-            # CHỌN MÀU + TRẠNG THÁI
-            # -----------------------------
-            if effective_status == 'stopped' and vehicle.status_frames >= self.config.MIN_FRAMES_STOP:
-                if vehicle.stop_start_time is not None:
-                    stop_duration = time.time() - vehicle.stop_start_time
-                    if stop_duration >= self.config.MAX_STOP_TIME_BEFORE_CAPTURE:
-                        color = (0, 0, 255)  # Dỏ - vi phạm
-                        status_text = "VI PHAM !!!"
-                    else:
-                        color = (0, 255, 0)  # Xanh - đang dừng
-                        status_text = "DA DUNG"
-                else:
-                    color = (0, 255, 0)
-                    status_text = "DA DUNG"
-                    
-                if vehicle.is_occluded:
-                    status_text += " (CHE KHUAT)"
-                    
-                #CHỈ XE DỪNG MỚI VẼ KHUNG
+            if not self._is_vehicle_visible(vehicle, current_time):
+                continue
+            box = self._get_vehicle_box(vehicle, assigned_detections, vehicle_id)
+            if box is None:
+                continue
+            x1, y1, x2, y2 = box
+            cls = getattr(vehicle, 'vehicle_class', 2)
+            # Xác định trạng thái màu sắc
+            color, should_draw_box, status_text = self._get_vehicle_visual_info(vehicle, current_time)
+            if should_draw_box:
                 cv2.rectangle(frame, (x1, y1), (x2, y2), color, 1)
+            if status_text and should_draw_box:
+                vehicle_name = self.config.VEHICLE_NAMES.get(cls, "Xe")
+                label = f"ID:{vehicle_id} {status_text}"
+                cv2.putText(frame, label, (x1, max(y1-5, 15)),
+                           self.font_small, self.font_scale_normal, color, self.thickness)
 
-            else:
-                # Xe đang di chuyển — chỉ vẽ text, không có khung
-                color = (0, 0, 255)
-                status_text = ""
-                if vehicle.is_occluded and effective_status == 'moving':
-                    status_text += ""
-            
-            
-            avg_confidence = np.mean(list(vehicle.confidence_history)) if vehicle.confidence_history else 0
-            if (status_text == ""):
-                label = f""
-                cv2.putText(frame, label, (x1, y1 - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 1)
-                cv2.putText(frame, status_text, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
-            else:
-                label = f"ID:{vehicle_id} {vehicle_name} {status_text} {avg_confidence:.2f}"
-                cv2.putText(frame, label, (x1, y1 - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 1)
-                cv2.putText(frame, status_text, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
-            # Thời gian dừng (nếu có)
-            if vehicle.stop_start_time is not None:
-                stop_duration = time.time() - vehicle.stop_start_time
-                duration_text = f"Dung: {int(stop_duration)}s"
-                cv2.putText(frame, duration_text, (x1, y2 + 20), 
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
-            
-            # Vẽ đường di chuyển (trail)
-            if len(vehicle.positions) > 1:
-                points = np.array(vehicle.positions, dtype=np.int32)
-                cv2.polylines(frame, [points], False, color, 0)
+    def _is_vehicle_visible(self, vehicle, current_time):
+        if not hasattr(vehicle, 'last_seen'):
+            return True
+        if current_time - vehicle.last_seen > 2.0:
+            return False
+        return True
 
-    def draw_statistics(self, frame, stats):
-        """Draw statistics on frame"""
-        # violations_count = int(stats.get('violations', 0))
-        # cv2.putText(frame, f"Vi pham: {violations_count}", (10, 210), 
-        #             cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
-        
-        y_pos = 30
-        stats_color = (255, 255, 255)
-        font = cv2.FONT_HERSHEY_SIMPLEX
-        
-        info_list = [
-            (f"Tong so xe: {stats['total']}", stats_color),
-            (f"Dang dung: {stats['stopped']}", stats_color),
-            (f"Vi pham: {stats.get('violations', 0)}", (0, 0, 255))
+    def _get_vehicle_box(self, vehicle, assigned_detections, vehicle_id):
+        if vehicle_id in assigned_detections:
+            _, detection = assigned_detections[vehicle_id]
+            return detection['box']
+        elif hasattr(vehicle, 'last_box') and vehicle.last_box:
+            return vehicle.last_box
+        else:
+            return None
+
+    def _get_vehicle_visual_info(self, vehicle, current_time):
+        effective_status = getattr(vehicle, 'effective_status', 'moving')
+        color = self.colors['moving']
+        should_draw_box = False
+        status_text = ""
+        if (effective_status == 'stopped' and hasattr(vehicle, 'status_frames') \
+                and vehicle.status_frames >= self.config.MIN_FRAMES_STOP):
+            should_draw_box = True
+            if hasattr(vehicle, 'stop_start_time') and vehicle.stop_start_time:
+                stop_duration = current_time - vehicle.stop_start_time
+                if stop_duration >= self.config.MAX_STOP_TIME_BEFORE_CAPTURE:
+                    color = self.colors['violation']  # Đỏ khi vi phạm
+                    status_text = "VI PHAM!"
+                else:
+                    color = self.colors['stopped']    # Trắng khi chỉ dừng
+                    status_text = f"DUNG:{int(stop_duration)}s"
+            else:
+                color = self.colors['stopped']
+                status_text = "DUNG"
+        return color, should_draw_box, status_text
+
+    # Các hàm sau giữ nguyên
+    def draw_vehicles_simple(self, frame, vehicles):
+        current_time = time.time()
+        violation_count = 0
+        for vehicle_id, vehicle in vehicles.items():
+            if not self._is_vehicle_violating(vehicle, current_time):
+                continue
+            box = getattr(vehicle, 'current_box', None) or getattr(vehicle, 'last_box', None)
+            if box is None:
+                continue
+            x1, y1, x2, y2 = box
+            cv2.rectangle(frame, (x1, y1), (x2, y2), self.colors['violation'], 1)
+            label = f"VI PHAM ID:{vehicle_id} | DUNG QUA {int(current_time - vehicle.stop_start_time)}s"
+            cv2.putText(frame, label, (x1, max(y1-10, 20)),
+                       self.font_small, 0.5, self.colors['violation'], 1)
+            violation_count += 1
+        return violation_count
+
+    def _is_vehicle_violating(self, vehicle, current_time):
+        if not (hasattr(vehicle, 'stop_start_time') and vehicle.stop_start_time):
+            return False
+        stop_duration = current_time - vehicle.stop_start_time
+        return (stop_duration >= self.config.MAX_STOP_TIME_BEFORE_CAPTURE and
+                getattr(vehicle, 'status_frames', 0) >= self.config.MIN_FRAMES_STOP)
+
+    def draw_statistics_fast(self, frame, stats):
+        h, w = frame.shape[:2]
+        overlay = frame.copy()
+        cv2.rectangle(overlay, (0, 0), (270, 80), (0, 0, 0), -1)
+        cv2.addWeighted(overlay, 0.7, frame, 0.3, 0, frame)
+        y_pos = 25
+        line_height = 25
+        stats_info = [
+            (f"Tong xe: {stats.get('total', 0)}", self.colors['text']),
+            (f"Dang dung: {stats.get('stopped', 0)} | Vi pham: {stats.get('violations', 0)}", self.colors['stopped']),
+            (f"Thoi gian: {time.strftime('%H:%M:%S')}", self.colors['text'])
         ]
-        
-        for text, color in info_list:
-            cv2.putText(frame, text, (10, y_pos), font, 0.6, color, 1)
-            y_pos += 30
+        for text, color in stats_info:
+            cv2.putText(frame, text, (10, y_pos), self.font_small, 0.6, color, 1)
+            y_pos += line_height
+    def draw_vehicles(self, frame, vehicles, assigned_detections):
+        return self.draw_vehicles_fast(frame, vehicles, assigned_detections)
+    def draw_statistics(self, frame, stats):
+        return self.draw_statistics_fast(frame, stats)

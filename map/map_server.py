@@ -4,6 +4,7 @@ import os
 
 app = Flask(__name__)
 
+# Flask app hiển thị và cập nhật bản đồ vị trí xe vi phạm
 @app.route("/")
 def index():
     return render_template("map.html")

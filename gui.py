@@ -10,9 +10,12 @@ from datetime import datetime
 import ast
 import pprint
 import importlib
-
+from models.picturemodel import PictureModel
+import uuid
 class CarCheckGUI:
+    """Giao diện chính của app CarCheck với các chức năng điều khiển, cấu hình, xem lịch sử."""
     def __init__(self):
+        DB_FILE = "pictures.txt"
         self.root = tk.Tk()
         self.root.title('CarCheck — Phát hiện vi phạm đậu xe')
         self.root.configure(bg='#ffffff')
@@ -152,64 +155,115 @@ class CarCheckGUI:
         history_header = tk.Frame(history_card, bg=self.colors['card_bg'])
         history_header.pack(fill='x', pady=(0, 10))
         
+        # --- XÓA hai nút Làm mới và Xuất báo cáo ---
         tk.Label(history_header, text='📋 LỊCH SỬ VI PHẠM',
                 font=('Segoe UI', 14, 'bold'),
                 bg=self.colors['card_bg'],
                 fg=self.colors['text']).pack(side='left')
-        
-        # Action buttons for history
-        history_actions = tk.Frame(history_header, bg=self.colors['card_bg'])
-        history_actions.pack(side='right')
-        
-        tk.Button(history_actions, text='🔄 Làm mới',
-                 font=('Segoe UI', 9),
-                 bg=self.colors['primary'],
-                 fg='white',
-                 relief='flat',
-                 command=self._refresh_history).pack(side='left', padx=(5,0))
-        
-        tk.Button(history_actions, text='📊 Xuất báo cáo',
-                 font=('Segoe UI', 9),
-                 bg=self.colors['success'],
-                 fg='white',
-                 relief='flat',
-                 command=self._export_report).pack(side='left', padx=5)
-        
-        # Treeview for violation history
+
+        tk.Button(history_header, text='🔄 Làm mới',
+                font=('Segoe UI', 11),
+                bg=self.colors['primary'],
+                fg='white',
+                relief='flat',
+                command=self._load_history_from_txt).pack(side='right', padx=(0, 5))
+
+
+        # --- TreeView hiển thị lịch sử ---
         tree_frame = tk.Frame(history_card, bg=self.colors['card_bg'])
         tree_frame.pack(fill='both', expand=True)
-        
-        # Create scrollbar
+
         scrollbar = tk.Scrollbar(tree_frame)
         scrollbar.pack(side='right', fill='y')
-        
-        # Create treeview
-        columns = ('time', 'license_plate', 'violation_type', 'location')
+
+        columns = ('time', 'license_plate', 'image', 'location')
         self.history_tree = ttk.Treeview(
-            tree_frame, 
-            columns=columns, 
+            tree_frame,
+            columns=columns,
             show='headings',
             yscrollcommand=scrollbar.set,
             height=15
         )
-        
-        # Define headings
+
+        # Set tiêu đề cột
         self.history_tree.heading('time', text='Thời gian')
-        self.history_tree.heading('license_plate', text='Biển số')
-        self.history_tree.heading('violation_type', text='Loại vi phạm')
+        self.history_tree.heading('license_plate', text='Id')
+        self.history_tree.heading('image', text='Ảnh vi phạm')
         self.history_tree.heading('location', text='Vị trí')
-        
-        # Define column widths
-        self.history_tree.column('time', width=120)
+
+        # Set độ rộng cột
+        self.history_tree.column('time', width=50)
         self.history_tree.column('license_plate', width=100)
-        self.history_tree.column('violation_type', width=150)
-        self.history_tree.column('location', width=120)
-        
+        self.history_tree.column('image', width=200)
+        self.history_tree.column('location', width=200)
+
         self.history_tree.pack(side='left', fill='both', expand=True)
         scrollbar.config(command=self.history_tree.yview)
+        # Thêm sự kiện double click
+        self.history_tree.bind("<Double-1>", self._on_history_tree_double_click)
+        # ---- TỰ ĐỘNG LOAD TỪ TXT ----
+        self._load_history_from_txt()
         
-        # Add some sample data (in real app, this would come from database)
-        self._add_sample_data()
+
+    @staticmethod
+    def load_all_pictures():
+        pictures = []
+
+        if not os.path.exists("pictures.txt"):
+            return pictures
+
+        with open("pictures.txt", "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+
+                parts = line.split("|")
+                if len(parts) != 5:
+                    continue
+
+                pic_id, img_path, lat, lon, timestamp = parts
+
+                picture = PictureModel(
+                    id=pic_id,
+                    image_path=img_path,
+                    lat=float(lat),
+                    lon=float(lon),
+                    timestamp=timestamp
+                )
+                pictures.append(picture)
+
+        return pictures
+        
+    
+    def _load_history_from_txt(self):
+        """Load violation history from pictures.txt"""
+
+        # Clear table
+        for row in self.history_tree.get_children():
+            self.history_tree.delete(row)
+
+        pictures = self.load_all_pictures()
+
+        for pic in pictures:
+            # Format timestamp để hiển thị đẹp
+            try:
+                time_str = datetime.strptime(pic.timestamp, "%Y%m%d_%H%M%S") \
+                                    .strftime("%H:%M %d/%m")
+            except:
+                time_str = pic.timestamp
+            img_name = os.path.basename(pic.image_path)
+            self.history_tree.insert(
+                "", "end",
+                iid=str(uuid.uuid4()),
+                values=(
+                    time_str,
+                    pic.id,                 # tạm xem id là biển số
+                    img_name,
+                    f"{pic.lat}, {pic.lon}"
+                ),
+                tags=(pic.image_path,)
+            )
 
     def _create_card(self, parent, title):
         card = tk.Frame(parent, bg=self.colors['card_bg'], 
@@ -223,17 +277,7 @@ class CarCheckGUI:
         
         return card
 
-    def _add_sample_data(self):
-        """Add sample violation data for demonstration"""
-        sample_data = [
-            ('14:30 15/12', '51A-123.45', 'Đậu sai vạch', 'Khu A - Tầng 1'),
-            ('09:15 15/12', '30B-678.90', 'Chiếm 2 vị trí', 'Khu B - Tầng 2'),
-            ('16:45 14/12', '29C-543.21', 'Đậu không đúng nơi', 'Khu C - Tầng 1'),
-            ('11:20 14/12', '51A-987.65', 'Đậu sai vạch', 'Khu A - Tầng 3'),
-        ]
-        
-        for item in sample_data:
-            self.history_tree.insert('', 'end', values=item)
+    
 
     def _refresh_history(self):
         """Refresh violation history"""
@@ -278,30 +322,13 @@ class CarCheckGUI:
             self.status_indicator.config(fg=self.colors['success'])
             self.start_btn.config(state='disabled')
             self.stop_btn.config(state='normal')
+            self._monitor_process()
             
-            # Simulate adding new violation when detection starts
-            self._simulate_new_violation()
+            # self._simulate_new_violation()
             
         except Exception as e:
             messagebox.showerror('Lỗi', f'Không thể khởi động:\n{e}')
 
-    def _simulate_new_violation(self):
-        """Simulate adding a new violation for demo purposes"""
-        import random
-        license_plates = ['51A-123.45', '30B-678.90', '29C-543.21', '51A-987.65', '30D-111.22']
-        violation_types = ['Đậu sai vạch', 'Chiếm 2 vị trí', 'Đậu không đúng nơi', 'Đậu khu vực cấm']
-        locations = ['Khu A - Tầng 1', 'Khu B - Tầng 2', 'Khu C - Tầng 1', 'Khu A - Tầng 3']
-        
-        current_time = datetime.now().strftime('%H:%M %d/%m')
-        new_violation = (
-            current_time,
-            random.choice(license_plates),
-            random.choice(violation_types),
-            random.choice(locations)
-        )
-        
-        # Add to the top of the treeview
-        self.history_tree.insert('', 0, values=new_violation)
 
     def _stop_detection(self):
         if not self.proc or self.proc.poll() is not None:
@@ -317,6 +344,16 @@ class CarCheckGUI:
         self.status_indicator.config(fg=self.colors['danger'])
         self.start_btn.config(state='normal')
         self.stop_btn.config(state='disabled')
+
+    def _monitor_process(self):
+        if self.proc and self.proc.poll() is not None:
+            self.status_var.set('Đã dừng')
+            self.status_indicator.config(fg=self.colors['danger'])
+            self.start_btn.config(state='normal')
+            self.stop_btn.config(state='disabled')
+            self.proc = None
+        else:
+            self.root.after(500, self._monitor_process)
 
     def open_config(self):
         """Open configuration editor with modern design"""
@@ -348,9 +385,9 @@ class CarCheckGUI:
             win = tk.Toplevel(self.root)
             win.title('Cấu hình CarCheck')
             win.transient(self.root)
-            win.geometry('700x500')
+            win.geometry('500x700')
             win.configure(bg=self.colors['background'])
-            self._center_window_on_parent(win, 700, 500)
+            self._center_window_on_parent(win, 500, 700)
 
             # Header
             header = tk.Frame(win, bg=self.colors['primary'], height=60)
@@ -385,69 +422,98 @@ class CarCheckGUI:
 
             editors = {}
 
+            # --- MAP tiếng Việt cho từng tham số phổ biến ---
+            CONFIG_VN_LABELS = {
+                # ==== HIỂN THỊ ====
+                'VISUALIZER_MODE': 'Chế độ hiển thị khung (Nhanh / Đơn giản / Đầy đủ)',
+                'DRAW_VEHICLE_TRAILS': 'Vẽ đường di chuyển của xe',
+                'DRAW_CONFIDENCE': 'Hiển thị % độ tin cậy YOLO',
+                'MIN_DISPLAY_CONFIDENCE': 'Chỉ hiển thị box nếu độ tin cậy ≥ giá trị này',
+
+                # ==== HÀNH VI XE ====
+                'MOVE_THRESHOLD': 'Ngưỡng tốc độ: > giá trị này → xe đang di chuyển',
+                'STOP_THRESHOLD': 'Ngưỡng tốc độ: < giá trị này → xe đang dừng',
+                'MIN_FRAMES_STOP': 'Số frame liên tiếp để xác định xe đã dừng',
+                'MIN_FRAMES_MOVE': 'Số frame liên tiếp để xác định xe đang di chuyển',
+
+                # ==== LỌC YOLO ====
+                'CONFIDENCE_THRESHOLD': 'Ngưỡng tin cậy YOLO tối thiểu',
+                'VEHICLE_CONFIDENCE_THRESHOLDS': 'Ngưỡng tin cậy riêng từng loại xe',
+                'MIN_BOX_AREA': 'Diện tích bbox nhỏ nhất (lọc nhiễu)',
+                'MIN_BOX_WIDTH': 'Chiều rộng bbox nhỏ nhất',
+                'MIN_BOX_HEIGHT': 'Chiều cao bbox nhỏ nhất',
+
+                # ==== TRACKING ====
+                'IOU_THRESHOLD': 'Ngưỡng IoU để ghép detection vào track',
+                'MAX_TRACK_AGE': 'Track bị mất dấu quá số frame này → xoá',
+                'MIN_TRACK_CONFIDENCE': 'Track có tin cậy trung bình thấp hơn → xoá',
+                'MIN_DETECTIONS_TO_KEEP': 'Cần detect tối thiểu bao nhiêu lần để tạo track',
+                'OCCLUSION_THRESHOLD': 'Số frame cho phép xe bị che khuất',
+                'MISSING_SECONDS': 'Số giây tối đa xe mất dấu trước khi xoá',
+
+                # ==== HIỆU NĂNG ====
+                'DETECTION_INTERVAL': 'Số frame giữa mỗi lần YOLO chạy detect',
+                'MODEL_IMG_SIZE': 'Kích thước input YOLO',
+                'SKIP_FRAMES': 'Bỏ qua bao nhiêu frame giữa các lần xử lý',
+
+                # ==== CHỤP VI PHẠM ====
+                'VIOLATION_CAPTURE_ENABLED': 'Bật/tắt chụp ảnh xe vi phạm',
+                'MAX_STOP_TIME_BEFORE_CAPTURE': 'Thời gian dừng (giây) trước khi chụp vi phạm',
+                'CAPTURE_DIR': 'Thư mục lưu ảnh',
+                'SAVE_FULL_FRAME': 'Lưu toàn bộ frame thay vì chỉ vùng xe',
+                'CAPTURE_COOLDOWN': 'Thời gian cooldown mỗi xe (giây)',
+
+                # ==== TÊN PHƯƠNG TIỆN ====
+                'VEHICLE_NAMES': 'Tên hiển thị cho từng loại xe'
+            }
+
+
+
             for r, (name, val) in enumerate(attrs):
-                # Create setting card
                 setting_card = tk.Frame(scroll_frame, bg=self.colors['card_bg'], pady=8)
                 setting_card.pack(fill='x', pady=4)
-
-                # Setting name with type
+                # Tiêu đề tiếng Việt hoặc tên biến
+                label_text = CONFIG_VN_LABELS.get(name, name)
                 name_font = ('Segoe UI', 10, 'bold')
-                name_label = tk.Label(setting_card, 
-                                     text=f"{name} ({type(val).__name__})",
-                                     font=name_font,
-                                     bg=self.colors['card_bg'],
-                                     fg=self.colors['text'],
-                                     anchor='w')
-                name_label.pack(fill='x', pady=(0, 5))
-
-                # Editor based on type
+                label = tk.Label(setting_card,
+                    text=label_text,
+                    font=('Segoe UI', 11, 'bold'),
+                    bg=self.colors['card_bg'],
+                    fg='#4D4D4D', anchor='w')
+                label.pack(fill='x', pady=(0, 3))
+                # Phụ đề: tên biến và kiểu
+                subtitle = f"({name}: {type(val).__name__})"
+                subtitle_label = tk.Label(setting_card, text=subtitle, font=('Segoe UI', 8, 'italic'),
+                    bg=self.colors['card_bg'], fg='#999999', anchor='w')
+                subtitle_label.pack(fill='x', pady=(0, 2))
+                # Editor như logic cũ
                 if isinstance(val, bool):
                     var = tk.BooleanVar(value=val)
                     cb_frame = tk.Frame(setting_card, bg=self.colors['card_bg'])
                     cb_frame.pack(fill='x')
-
-                    cb = tk.Checkbutton(cb_frame, 
-                                       variable=var,
-                                       text=f'Bật/Tắt {name}',
-                                       bg=self.colors['card_bg'],
-                                       fg=self.colors['text'],
-                                       selectcolor=self.colors['primary'],
-                                       font=('Segoe UI', 9))
+                    cb = tk.Checkbutton(cb_frame,
+                        variable=var,
+                        text='Bật/Tắt',
+                        bg=self.colors['card_bg'],
+                        fg=self.colors['text'],
+                        selectcolor=self.colors['primary'],
+                        font=('Segoe UI', 9))
                     cb.pack(side='left')
                     editors[name] = ('bool', var)
-
                 elif isinstance(val, (int, float)):
                     var = tk.StringVar(value=str(val))
-                    entry = tk.Entry(setting_card, 
-                                    textvariable=var,
-                                    font=('Segoe UI', 9),
-                                    bg='white',
-                                    relief='solid',
-                                    bd=1)
+                    entry = tk.Entry(setting_card, textvariable=var, font=('Segoe UI', 9), bg='white', relief='solid', bd=1)
                     entry.pack(fill='x', pady=2)
                     editors[name] = ('number', var)
-
                 elif isinstance(val, str):
-                    entry = tk.Entry(setting_card,
-                                    font=('Segoe UI', 9),
-                                    bg='white',
-                                    relief='solid',
-                                    bd=1)
+                    entry = tk.Entry(setting_card, font=('Segoe UI', 9), bg='white', relief='solid', bd=1)
                     entry.insert(0, val)
                     entry.pack(fill='x', pady=2)
                     editors[name] = ('string', entry)
-
                 else:
-                    # Complex types
                     txt_frame = tk.Frame(setting_card, bg=self.colors['card_bg'])
                     txt_frame.pack(fill='x')
-
-                    txt = tk.Text(txt_frame, 
-                                 height=3, 
-                                 font=('Consolas', 8),
-                                 bg='#f8f9fa',
-                                 relief='solid',
-                                 bd=1)
+                    txt = tk.Text(txt_frame, height=3, font=('Consolas', 8), bg='#f8f9fa', relief='solid', bd=1)
                     txt.insert('1.0', pprint.pformat(val))
                     txt.pack(fill='x', pady=2)
                     editors[name] = ('text', txt)
@@ -536,7 +602,7 @@ class CarCheckGUI:
                 except Exception as e:
                     messagebox.showerror('Lỗi', f'Không thể lưu cấu hình:\n{e}')
 
-            # Modern buttons
+            # Các nút cũng chỉnh Việt hóa rõ ràng
             save_btn = tk.Button(btn_frame,
                                text='💾 LƯU CẤU HÌNH',
                                font=('Segoe UI', 10, 'bold'),
@@ -549,7 +615,6 @@ class CarCheckGUI:
                                pady=8,
                                command=on_apply)
             save_btn.pack(side='right', padx=(10, 0))
-
             cancel_btn = tk.Button(btn_frame,
                                  text='↩ ĐÓNG',
                                  font=('Segoe UI', 10, 'bold'),
@@ -586,6 +651,22 @@ class CarCheckGUI:
             webbrowser.open("http://127.0.0.1:5001")
         except Exception as e:
             messagebox.showerror("Lỗi", f"Không thể mở bản đồ: {e}")
+
+    def _on_history_tree_double_click(self, event):
+        item = self.history_tree.identify_row(event.y)
+        if not item:
+            return
+        # Lấy path ảnh từ tag của item
+        tags = self.history_tree.item(item, 'tags')
+        if tags:
+            img_path = tags[0]
+            if os.path.exists(img_path):
+                try:
+                    os.startfile(img_path)
+                except Exception as e:
+                    messagebox.showerror("Không thể mở ảnh", str(e))
+            else:
+                messagebox.showerror("Lỗi", "File ảnh không tồn tại: " + img_path)
 
     def run(self):
         self.root.mainloop()

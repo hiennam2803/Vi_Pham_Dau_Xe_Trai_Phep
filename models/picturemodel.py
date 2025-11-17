@@ -1,4 +1,5 @@
 class PictureModel:
+    """Đại diện một bức ảnh chụp vi phạm và métadữ liệu liên quan."""
     def __init__(self, id, image_path, lat, lon, timestamp):
         self.id = id
         self.image_path = image_path

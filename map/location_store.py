@@ -3,6 +3,7 @@ import os
 latitude = None
 longitude = None
 
+# Lưu trữ và truy vấn vị trí GPS cho hệ thống
 def set_location(lat, lon):
     global latitude, longitude
     latitude = lat
