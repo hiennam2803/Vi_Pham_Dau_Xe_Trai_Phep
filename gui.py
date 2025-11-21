@@ -12,16 +12,19 @@ import pprint
 import importlib
 from models.picturemodel import PictureModel
 import uuid
+
 class CarCheckGUI:
-    """Giao diện chính của app CarCheck với các chức năng điều khiển, cấu hình, xem lịch sử."""
+    """Giao diện chính ứng dụng phát hiện vi phạm đậu xe"""
+    
     def __init__(self):
+        # Khởi tạo cửa sổ chính
         DB_FILE = "pictures.txt"
         self.root = tk.Tk()
         self.root.title('CarCheck — Phát hiện vi phạm đậu xe')
         self.root.configure(bg='#ffffff')
         self.root.geometry('1000x600')
         
-        # Modern color scheme
+        # Bảng màu hiện đại
         self.colors = {
             'primary': '#4361ee',
             'success': '#06d6a0', 
@@ -33,27 +36,29 @@ class CarCheckGUI:
             'border': '#dee2e6'
         }
         
+        # Biến lưu nguồn video và quá trình xử lý
         self.source_var = tk.StringVar(value='0')
         self.proc = None
-        self.violation_history = []  # Store violation data
+        self.violation_history = []  # Lưu lịch sử vi phạm
         self._create_compact_ui()
 
     def _create_compact_ui(self):
-        # Main container with two columns
+        """Tạo giao diện người dùng gọn gàng với 2 cột"""
+        # Khung chính chia 2 cột
         main_frame = tk.Frame(self.root, bg=self.colors['background'])
         main_frame.pack(fill='both', expand=True, padx=20, pady=20)
         
-        # Left column - Controls (60%)
+        # Cột trái - Điều khiển (60%)
         left_frame = tk.Frame(main_frame, bg=self.colors['background'])
         left_frame.pack(side='left', fill='both', expand=True, padx=(0, 10))
         
-        # Right column - Violation history (40%)
+        # Cột phải - Lịch sử vi phạm (40%)
         right_frame = tk.Frame(main_frame, bg=self.colors['background'])
         right_frame.pack(side='right', fill='both', expand=True, padx=(10, 0))
         
-        # === LEFT COLUMN - CONTROLS ===
+        # === CỘT TRÁI - ĐIỀU KHIỂN ===
         
-        # Header
+        # Header ứng dụng
         header_frame = tk.Frame(left_frame, bg=self.colors['primary'], height=80)
         header_frame.pack(fill='x', pady=(0, 15))
         header_frame.pack_propagate(False)
@@ -65,7 +70,7 @@ class CarCheckGUI:
                               fg='white')
         title_label.pack(expand=True)
         
-        # Input section
+        # Phần chọn nguồn video
         input_card = self._create_card(left_frame, "📹 NGUỒN VIDEO")
         input_card.pack(fill='x', pady=(0, 10))
         
@@ -81,11 +86,11 @@ class CarCheckGUI:
                  command=self._choose_file, bg=self.colors['primary'],
                  fg='white', relief='flat').pack(side='left', padx=(10,0))
         
-        # Control buttons - compact layout
+        # Nút điều khiển chính
         control_card = self._create_card(left_frame, "🎮 ĐIỀU KHIỂN")
         control_card.pack(fill='x', pady=(0, 10))
         
-        # First row of buttons
+        # Hàng nút đầu tiên
         btn_row1 = tk.Frame(control_card, bg=self.colors['card_bg'])
         btn_row1.pack(fill='x', pady=5)
         
@@ -106,7 +111,7 @@ class CarCheckGUI:
                                  command=self._stop_detection)
         self.stop_btn.pack(side='left', padx=5, fill='x', expand=True)
         
-        # Second row of buttons
+        # Hàng nút thứ hai
         btn_row2 = tk.Frame(control_card, bg=self.colors['card_bg'])
         btn_row2.pack(fill='x', pady=5)
         
@@ -124,7 +129,7 @@ class CarCheckGUI:
                  relief='flat',
                  command=self._open_map).pack(side='left', padx=5, fill='x', expand=True)
         
-        # Status display
+        # Hiển thị trạng thái hệ thống
         status_card = self._create_card(left_frame, "📊 TRẠNG THÁI")
         status_card.pack(fill='x')
         
@@ -145,22 +150,22 @@ class CarCheckGUI:
                 bg=self.colors['card_bg'], 
                 font=('Segoe UI', 11, 'bold')).pack(side='left')
         
-        # === RIGHT COLUMN - VIOLATION HISTORY ===
+        # === CỘT PHẢI - LỊCH SỬ VI PHẠM ===
         
         history_card = tk.Frame(right_frame, bg=self.colors['card_bg'], 
                                relief='solid', bd=1, padx=15, pady=15)
         history_card.pack(fill='both', expand=True)
         
-        # History header
+        # Header lịch sử
         history_header = tk.Frame(history_card, bg=self.colors['card_bg'])
         history_header.pack(fill='x', pady=(0, 10))
         
-        # --- XÓA hai nút Làm mới và Xuất báo cáo ---
         tk.Label(history_header, text='📋 LỊCH SỬ VI PHẠM',
                 font=('Segoe UI', 14, 'bold'),
                 bg=self.colors['card_bg'],
                 fg=self.colors['text']).pack(side='left')
 
+        # Nút làm mới lịch sử
         tk.Button(history_header, text='🔄 Làm mới',
                 font=('Segoe UI', 11),
                 bg=self.colors['primary'],
@@ -168,14 +173,14 @@ class CarCheckGUI:
                 relief='flat',
                 command=self._load_history_from_txt).pack(side='right', padx=(0, 5))
 
-
-        # --- TreeView hiển thị lịch sử ---
+        # Bảng hiển thị lịch sử
         tree_frame = tk.Frame(history_card, bg=self.colors['card_bg'])
         tree_frame.pack(fill='both', expand=True)
 
         scrollbar = tk.Scrollbar(tree_frame)
         scrollbar.pack(side='right', fill='y')
 
+        # Tạo bảng với các cột
         columns = ('time', 'license_plate', 'image', 'location')
         self.history_tree = ttk.Treeview(
             tree_frame,
@@ -185,13 +190,13 @@ class CarCheckGUI:
             height=15
         )
 
-        # Set tiêu đề cột
+        # Đặt tiêu đề cột
         self.history_tree.heading('time', text='Thời gian')
         self.history_tree.heading('license_plate', text='Id')
         self.history_tree.heading('image', text='Ảnh vi phạm')
         self.history_tree.heading('location', text='Vị trí')
 
-        # Set độ rộng cột
+        # Đặt độ rộng cột
         self.history_tree.column('time', width=50)
         self.history_tree.column('license_plate', width=100)
         self.history_tree.column('image', width=200)
@@ -199,31 +204,36 @@ class CarCheckGUI:
 
         self.history_tree.pack(side='left', fill='both', expand=True)
         scrollbar.config(command=self.history_tree.yview)
-        # Thêm sự kiện double click
-        self.history_tree.bind("<Double-1>", self._on_history_tree_double_click)
-        # ---- TỰ ĐỘNG LOAD TỪ TXT ----
-        self._load_history_from_txt()
         
+        # Sự kiện double click để xem ảnh
+        self.history_tree.bind("<Double-1>", self._on_history_tree_double_click)
+        
+        # Tự động load dữ liệu khi khởi động
+        self._load_history_from_txt()
 
     @staticmethod
     def load_all_pictures():
+        """Đọc tất cả ảnh vi phạm từ file txt"""
         pictures = []
 
         if not os.path.exists("pictures.txt"):
             return pictures
 
+        # Đọc từng dòng trong file
         with open("pictures.txt", "r", encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
                 if not line:
                     continue
 
+                # Phân tích dữ liệu theo định dạng
                 parts = line.split("|")
                 if len(parts) != 5:
                     continue
 
                 pic_id, img_path, lat, lon, timestamp = parts
 
+                # Tạo đối tượng PictureModel
                 picture = PictureModel(
                     id=pic_id,
                     image_path=img_path,
@@ -235,37 +245,38 @@ class CarCheckGUI:
 
         return pictures
         
-    
     def _load_history_from_txt(self):
-        """Load violation history from pictures.txt"""
-
-        # Clear table
+        """Tải lịch sử vi phạm từ file pictures.txt"""
+        # Xóa dữ liệu cũ trong bảng
         for row in self.history_tree.get_children():
             self.history_tree.delete(row)
 
         pictures = self.load_all_pictures()
 
+        # Thêm từng bản ghi vào bảng
         for pic in pictures:
-            # Format timestamp để hiển thị đẹp
+            # Định dạng thời gian cho đẹp
             try:
                 time_str = datetime.strptime(pic.timestamp, "%Y%m%d_%H%M%S") \
                                     .strftime("%H:%M %d/%m")
             except:
                 time_str = pic.timestamp
+                
             img_name = os.path.basename(pic.image_path)
             self.history_tree.insert(
                 "", "end",
                 iid=str(uuid.uuid4()),
                 values=(
                     time_str,
-                    pic.id,                 # tạm xem id là biển số
+                    pic.id,                 # ID thay cho biển số
                     img_name,
                     f"{pic.lat}, {pic.lon}"
                 ),
-                tags=(pic.image_path,)
+                tags=(pic.image_path,)  # Lưu đường dẫn ảnh trong tag
             )
 
     def _create_card(self, parent, title):
+        """Tạo thẻ UI với tiêu đề"""
         card = tk.Frame(parent, bg=self.colors['card_bg'], 
                        relief='solid', bd=1, padx=15, pady=10)
         
@@ -277,24 +288,8 @@ class CarCheckGUI:
         
         return card
 
-    
-
-    def _refresh_history(self):
-        """Refresh violation history"""
-        # Clear current data
-        for item in self.history_tree.get_children():
-            self.history_tree.delete(item)
-        
-        # In real app, load from database
-        self._add_sample_data()
-        messagebox.showinfo("Thông báo", "Đã làm mới dữ liệu lịch sử vi phạm")
-
-    def _export_report(self):
-        """Export violation report"""
-        # In real app, this would generate and save a report
-        messagebox.showinfo("Xuất báo cáo", "Đã xuất báo cáo vi phạm thành công!")
-
     def _choose_file(self):
+        """Mở hộp thoại chọn file video"""
         path = filedialog.askopenfilename(
             title='Chọn file video',
             filetypes=[('Video files', '*.mp4 *.avi *.mov *.mkv'), ('All files', '*.*')]
@@ -303,6 +298,7 @@ class CarCheckGUI:
             self.source_var.set(path)
 
     def _start_detection(self):
+        """Bắt đầu quá trình phát hiện vi phạm"""
         if self.proc and self.proc.poll() is None:
             messagebox.showinfo('Đang chạy', 'CarCheck đang chạy')
             return
@@ -312,11 +308,13 @@ class CarCheckGUI:
             messagebox.showwarning('Lỗi', 'Vui lòng nhập nguồn (0 cho webcam) hoặc chọn file')
             return
 
+        # Chuẩn bị lệnh chạy main.py
         current_dir = os.path.dirname(os.path.abspath(__file__))
         script_path = os.path.join(current_dir, 'main.py')
         cmd = [sys.executable or 'python', script_path, '--source', source]
 
         try:
+            # Chạy process phát hiện
             self.proc = subprocess.Popen(cmd, cwd=current_dir)
             self.status_var.set('🟢 Đang chạy...')
             self.status_indicator.config(fg=self.colors['success'])
@@ -324,39 +322,42 @@ class CarCheckGUI:
             self.stop_btn.config(state='normal')
             self._monitor_process()
             
-            # self._simulate_new_violation()
-            
         except Exception as e:
             messagebox.showerror('Lỗi', f'Không thể khởi động:\n{e}')
 
-
     def _stop_detection(self):
+        """Dừng quá trình phát hiện"""
         if not self.proc or self.proc.poll() is not None:
             return
             
+        # Dừng process
         self.proc.terminate()
         try:
             self.proc.wait(timeout=5)
         except:
             pass
             
+        # Cập nhật giao diện
         self.status_var.set('Hệ thống đang dừng')
         self.status_indicator.config(fg=self.colors['danger'])
         self.start_btn.config(state='normal')
         self.stop_btn.config(state='disabled')
 
     def _monitor_process(self):
+        """Giám sát tiến trình phát hiện"""
         if self.proc and self.proc.poll() is not None:
+            # Process đã kết thúc
             self.status_var.set('Đã dừng')
             self.status_indicator.config(fg=self.colors['danger'])
             self.start_btn.config(state='normal')
             self.stop_btn.config(state='disabled')
             self.proc = None
         else:
+            # Tiếp tục giám sát
             self.root.after(500, self._monitor_process)
 
     def open_config(self):
-        """Open configuration editor with modern design"""
+        """Mở trình chỉnh sửa cấu hình"""
         try:
             current_dir = os.path.dirname(os.path.abspath(__file__))
             cfg_path = os.path.join(current_dir, 'config.py')
@@ -364,6 +365,7 @@ class CarCheckGUI:
                 messagebox.showwarning('Không tìm thấy', f'Không tìm thấy file cấu hình: {cfg_path}')
                 return
 
+            # Tải module config
             try:
                 import config as cfg
                 importlib.reload(cfg)
@@ -371,17 +373,19 @@ class CarCheckGUI:
                 messagebox.showerror('Lỗi', f'Không thể nạp config module:\n{e}')
                 return
 
+            # Lấy class Config
             cfg_cls = getattr(cfg, 'Config', None)
             if cfg_cls is None:
                 messagebox.showwarning('Không tìm thấy', 'Không tìm thấy class Config trong config.py')
                 return
 
+            # Lấy tất cả thuộc tính cấu hình
             attrs = [(name, getattr(cfg_cls, name)) for name in dir(cfg_cls) if name.isupper()]
             if not attrs:
                 messagebox.showinfo('Rỗng', 'Không tìm thấy tham số cấu hình để chỉnh sửa.')
                 return
 
-            # Create modern config window
+            # Tạo cửa sổ cấu hình
             win = tk.Toplevel(self.root)
             win.title('Cấu hình CarCheck')
             win.transient(self.root)
@@ -389,7 +393,7 @@ class CarCheckGUI:
             win.configure(bg=self.colors['background'])
             self._center_window_on_parent(win, 500, 700)
 
-            # Header
+            # Header cửa sổ cấu hình
             header = tk.Frame(win, bg=self.colors['primary'], height=60)
             header.pack(fill='x')
             header.pack_propagate(False)
@@ -404,11 +408,11 @@ class CarCheckGUI:
                     bg=self.colors['primary'],
                     fg='white').pack(side='left')
 
-            # Container
+            # Container chính
             container = tk.Frame(win, bg=self.colors['background'], padx=15, pady=15)
             container.pack(fill='both', expand=True)
 
-            # Scrollable content
+            # Tạo vùng cuộn cho nhiều cấu hình
             canvas = tk.Canvas(container, bg=self.colors['background'], highlightthickness=0)
             scrollbar = tk.Scrollbar(container, orient='vertical', command=canvas.yview)
             scroll_frame = tk.Frame(canvas, bg=self.colors['background'])
@@ -422,28 +426,28 @@ class CarCheckGUI:
 
             editors = {}
 
-            # --- MAP tiếng Việt cho từng tham số phổ biến ---
+            # Bản dịch tiếng Việt cho các tham số
             CONFIG_VN_LABELS = {
-                # ==== HIỂN THỊ ====
+                # Hiển thị
                 'VISUALIZER_MODE': 'Chế độ hiển thị khung (Nhanh / Đơn giản / Đầy đủ)',
                 'DRAW_VEHICLE_TRAILS': 'Vẽ đường di chuyển của xe',
                 'DRAW_CONFIDENCE': 'Hiển thị % độ tin cậy YOLO',
                 'MIN_DISPLAY_CONFIDENCE': 'Chỉ hiển thị box nếu độ tin cậy ≥ giá trị này',
 
-                # ==== HÀNH VI XE ====
+                # Hành vi xe
                 'MOVE_THRESHOLD': 'Ngưỡng tốc độ: > giá trị này → xe đang di chuyển',
                 'STOP_THRESHOLD': 'Ngưỡng tốc độ: < giá trị này → xe đang dừng',
                 'MIN_FRAMES_STOP': 'Số frame liên tiếp để xác định xe đã dừng',
                 'MIN_FRAMES_MOVE': 'Số frame liên tiếp để xác định xe đang di chuyển',
 
-                # ==== LỌC YOLO ====
+                # Lọc YOLO
                 'CONFIDENCE_THRESHOLD': 'Ngưỡng tin cậy YOLO tối thiểu',
                 'VEHICLE_CONFIDENCE_THRESHOLDS': 'Ngưỡng tin cậy riêng từng loại xe',
                 'MIN_BOX_AREA': 'Diện tích bbox nhỏ nhất (lọc nhiễu)',
                 'MIN_BOX_WIDTH': 'Chiều rộng bbox nhỏ nhất',
                 'MIN_BOX_HEIGHT': 'Chiều cao bbox nhỏ nhất',
 
-                # ==== TRACKING ====
+                # Tracking
                 'IOU_THRESHOLD': 'Ngưỡng IoU để ghép detection vào track',
                 'MAX_TRACK_AGE': 'Track bị mất dấu quá số frame này → xoá',
                 'MIN_TRACK_CONFIDENCE': 'Track có tin cậy trung bình thấp hơn → xoá',
@@ -451,28 +455,28 @@ class CarCheckGUI:
                 'OCCLUSION_THRESHOLD': 'Số frame cho phép xe bị che khuất',
                 'MISSING_SECONDS': 'Số giây tối đa xe mất dấu trước khi xoá',
 
-                # ==== HIỆU NĂNG ====
+                # Hiệu năng
                 'DETECTION_INTERVAL': 'Số frame giữa mỗi lần YOLO chạy detect',
                 'MODEL_IMG_SIZE': 'Kích thước input YOLO',
                 'SKIP_FRAMES': 'Bỏ qua bao nhiêu frame giữa các lần xử lý',
 
-                # ==== CHỤP VI PHẠM ====
+                # Chụp vi phạm
                 'VIOLATION_CAPTURE_ENABLED': 'Bật/tắt chụp ảnh xe vi phạm',
                 'MAX_STOP_TIME_BEFORE_CAPTURE': 'Thời gian dừng (giây) trước khi chụp vi phạm',
                 'CAPTURE_DIR': 'Thư mục lưu ảnh',
                 'SAVE_FULL_FRAME': 'Lưu toàn bộ frame thay vì chỉ vùng xe',
                 'CAPTURE_COOLDOWN': 'Thời gian cooldown mỗi xe (giây)',
 
-                # ==== TÊN PHƯƠNG TIỆN ====
+                # Tên phương tiện
                 'VEHICLE_NAMES': 'Tên hiển thị cho từng loại xe'
             }
 
-
-
+            # Tạo giao diện chỉnh sửa cho từng tham số
             for r, (name, val) in enumerate(attrs):
                 setting_card = tk.Frame(scroll_frame, bg=self.colors['card_bg'], pady=8)
                 setting_card.pack(fill='x', pady=4)
-                # Tiêu đề tiếng Việt hoặc tên biến
+                
+                # Tiêu đề tiếng Việt
                 label_text = CONFIG_VN_LABELS.get(name, name)
                 name_font = ('Segoe UI', 10, 'bold')
                 label = tk.Label(setting_card,
@@ -481,12 +485,14 @@ class CarCheckGUI:
                     bg=self.colors['card_bg'],
                     fg='#4D4D4D', anchor='w')
                 label.pack(fill='x', pady=(0, 3))
-                # Phụ đề: tên biến và kiểu
+                
+                # Hiển thị tên biến và kiểu dữ liệu
                 subtitle = f"({name}: {type(val).__name__})"
                 subtitle_label = tk.Label(setting_card, text=subtitle, font=('Segoe UI', 8, 'italic'),
                     bg=self.colors['card_bg'], fg='#999999', anchor='w')
                 subtitle_label.pack(fill='x', pady=(0, 2))
-                # Editor như logic cũ
+                
+                # Tạo control phù hợp với kiểu dữ liệu
                 if isinstance(val, bool):
                     var = tk.BooleanVar(value=val)
                     cb_frame = tk.Frame(setting_card, bg=self.colors['card_bg'])
@@ -511,6 +517,7 @@ class CarCheckGUI:
                     entry.pack(fill='x', pady=2)
                     editors[name] = ('string', entry)
                 else:
+                    # Kiểu phức tạp dùng Text widget
                     txt_frame = tk.Frame(setting_card, bg=self.colors['card_bg'])
                     txt_frame.pack(fill='x')
                     txt = tk.Text(txt_frame, height=3, font=('Consolas', 8), bg='#f8f9fa', relief='solid', bd=1)
@@ -518,12 +525,14 @@ class CarCheckGUI:
                     txt.pack(fill='x', pady=2)
                     editors[name] = ('text', txt)
 
-            # Action buttons
+            # Nút hành động
             btn_frame = tk.Frame(win, bg=self.colors['background'], pady=10)
             btn_frame.pack(fill='x', padx=15)
 
             def on_apply():
+                """Xử lý khi nhấn nút áp dụng cấu hình"""
                 new_values = {}
+                # Thu thập giá trị mới từ các control
                 for name, (kind, widget) in editors.items():
                     try:
                         if kind == 'bool':
@@ -546,14 +555,16 @@ class CarCheckGUI:
                         messagebox.showerror('Lỗi', f'Lỗi khi xử lý giá trị {name}: {e}')
                         return
 
-                # Save configuration
+                # Ghi cấu hình mới vào file
                 try:
                     with open(cfg_path, 'r', encoding='utf-8') as f:
                         src = f.read()
 
+                    # Phân tích cú pháp file config
                     tree = ast.parse(src)
                     changed = False
 
+                    # Tìm class Config
                     for node in tree.body:
                         if isinstance(node, ast.ClassDef) and node.name == 'Config':
                             class_node = node
@@ -565,10 +576,12 @@ class CarCheckGUI:
                         raise RuntimeError('Không tìm thấy class Config trong file')
 
                     def value_node_from(obj):
+                        """Chuyển đổi giá trị thành AST node"""
                         literal_src = pprint.pformat(obj)
                         assign_node = ast.parse(f"_TMP = {literal_src}").body[0]
                         return assign_node.value
 
+                    # Cập nhật giá trị trong class Config
                     for name, val in new_values.items():
                         new_val_node = value_node_from(val)
                         found = False
@@ -580,6 +593,7 @@ class CarCheckGUI:
                                     found = True
                                     break
                         if not found:
+                            # Thêm thuộc tính mới
                             assign = ast.Assign(targets=[ast.Name(id=name, ctx=ast.Store())], value=new_val_node)
                             class_node.body.append(assign)
                             changed = True
@@ -588,6 +602,7 @@ class CarCheckGUI:
                         messagebox.showinfo('Không thay đổi', 'Không có thay đổi nào được phát hiện.')
                         return
 
+                    # Ghi file mới
                     try:
                         new_src = ast.unparse(tree)
                     except Exception:
@@ -596,13 +611,14 @@ class CarCheckGUI:
                     with open(cfg_path, 'w', encoding='utf-8') as f:
                         f.write(new_src)
 
+                    # Tải lại module config
                     importlib.reload(cfg)
                     messagebox.showinfo('Thành công', '✅ Cấu hình đã được cập nhật thành công!')
                     win.destroy()
                 except Exception as e:
                     messagebox.showerror('Lỗi', f'Không thể lưu cấu hình:\n{e}')
 
-            # Các nút cũng chỉnh Việt hóa rõ ràng
+            # Nút lưu và đóng
             save_btn = tk.Button(btn_frame,
                                text='💾 LƯU CẤU HÌNH',
                                font=('Segoe UI', 10, 'bold'),
@@ -615,6 +631,7 @@ class CarCheckGUI:
                                pady=8,
                                command=on_apply)
             save_btn.pack(side='right', padx=(10, 0))
+            
             cancel_btn = tk.Button(btn_frame,
                                  text='↩ ĐÓNG',
                                  font=('Segoe UI', 10, 'bold'),
@@ -632,18 +649,22 @@ class CarCheckGUI:
             messagebox.showerror('Lỗi', f'Không thể mở trình chỉnh sửa cấu hình:\n{e}')
 
     def _center_window_on_parent(self, window, w: int, h: int):
+        """Căn giữa cửa sổ con so với cửa sổ cha"""
         window.update_idletasks()
         x = self.root.winfo_x() + (self.root.winfo_width() // 2) - (w // 2)
         y = self.root.winfo_y() + (self.root.winfo_height() // 2) - (h // 2)
         window.geometry(f'{w}x{h}+{x}+{y}')
 
     def _open_map(self):
+        """Mở bản đồ hiển thị vị trí vi phạm"""
         try:
             def start_server():
+                """Khởi chạy server bản đồ trong thread riêng"""
                 sys.path.append("c:\\Users\\ASUS\\Desktop\\Viphamdauxe\\map")
                 from map_server import start_server
                 start_server()
 
+            # Chạy server trong thread để không block GUI
             server_thread = threading.Thread(target=start_server)
             server_thread.daemon = True
             server_thread.start()
@@ -653,22 +674,25 @@ class CarCheckGUI:
             messagebox.showerror("Lỗi", f"Không thể mở bản đồ: {e}")
 
     def _on_history_tree_double_click(self, event):
+        """Xử lý double click vào bản ghi lịch sử để mở ảnh"""
         item = self.history_tree.identify_row(event.y)
         if not item:
             return
-        # Lấy path ảnh từ tag của item
+            
+        # Lấy đường dẫn ảnh từ tag
         tags = self.history_tree.item(item, 'tags')
         if tags:
             img_path = tags[0]
             if os.path.exists(img_path):
                 try:
-                    os.startfile(img_path)
+                    os.startfile(img_path)  # Mở ảnh bằng app mặc định
                 except Exception as e:
                     messagebox.showerror("Không thể mở ảnh", str(e))
             else:
                 messagebox.showerror("Lỗi", "File ảnh không tồn tại: " + img_path)
 
     def run(self):
+        """Chạy ứng dụng"""
         self.root.mainloop()
 
 if __name__ == '__main__':

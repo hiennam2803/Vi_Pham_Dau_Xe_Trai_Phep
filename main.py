@@ -1,6 +1,3 @@
-"""
-Khởi động CarCheck từ command line, chọn chạy GUI hoặc xử lý video
-"""
 import argparse
 import sys
 from gui import CarCheckGUI
